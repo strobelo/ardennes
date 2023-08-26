@@ -12,6 +12,7 @@ from ardennes.serial import SeralizationHandler
 
 log = logging.getLogger(__name__)
 
+
 class HandlerType(Enum):
     SCATTER = "SCATTER"
     GATHER = "GATHER"
@@ -19,19 +20,23 @@ class HandlerType(Enum):
     SUBSCRIBE = "SUBSCRIBE"
     CONSUME = "CONSUME"
 
+
 HANDLER_EXCHANGE_TYPE_MAP = {
     HandlerType.SCATTER: ExchangeType.DIRECT,
     HandlerType.GATHER: ExchangeType.DIRECT,
     HandlerType.TRANSFORM: ExchangeType.DIRECT,
     HandlerType.SUBSCRIBE: ExchangeType.FANOUT,
-    HandlerType.CONSUME: ExchangeType.DIRECT
+    HandlerType.CONSUME: ExchangeType.DIRECT,
 }
+
 
 def get_model_queue_name(model: Type[BaseModel]):
     return model.__name__
 
+
 def get_exchange_name(model: Type[BaseModel], exchange_type: ExchangeType):
-    return f"{get_model_queue_name(model)}_{exchange_type.value}" 
+    return f"{get_model_queue_name(model)}_{exchange_type.value}"
+
 
 def get_exchange_names(model: Type[BaseModel]):
     result = {}
@@ -40,8 +45,16 @@ def get_exchange_names(model: Type[BaseModel]):
         result[exchange_type] = get_exchange_name(model, exchange_type)
     return result
 
-class Handler():
-    def __init__(self, input_model: Type[BaseModel], output_model: Optional[Type[BaseModel]], callback: Callable, handler_type: HandlerType, parent: "Ardennes"):
+
+class Handler:
+    def __init__(
+        self,
+        input_model: Type[BaseModel],
+        output_model: Optional[Type[BaseModel]],
+        callback: Callable,
+        handler_type: HandlerType,
+        parent: "Ardennes",
+    ):
         self.handler_id = uuid4()
         self.input_model = input_model
         self.output_model = output_model
@@ -58,6 +71,7 @@ class Handler():
                 async with message.process():
                     model = self.parent.serialization_handler.deserialize(message.body)
                     self.callback(model)
+
     @property
     def _pretty(self) -> str:
         input_name = self.input_model.__name__
@@ -82,17 +96,24 @@ class Handler():
         exchange_type = HANDLER_EXCHANGE_TYPE_MAP.get(self.handler_type)
         exchange_name = get_exchange_name(self.input_model, exchange_type)
         log.debug(f"Declaring exchange {exchange_name} for {self._pretty}")
-        self.exchange = await self.parent.channel.declare_exchange(exchange_name, exchange_type)
+        self.exchange = await self.parent.channel.declare_exchange(
+            exchange_name, exchange_type
+        )
 
     async def _ensure_queue(self):
         queue_name = get_model_queue_name(self.input_model)
         log.debug(f"Declaring queue {queue_name} for {self._pretty}")
-        self.queue = await self.parent.channel.declare_queue(queue_name, auto_delete=True)
+        self.queue = await self.parent.channel.declare_queue(
+            queue_name, auto_delete=True
+        )
 
 
-
-class Ardennes():
-    def __init__(self, concurrency: Optional[int] = None, serialization_handler: Optional[SeralizationHandler] = None):
+class Ardennes:
+    def __init__(
+        self,
+        concurrency: Optional[int] = None,
+        serialization_handler: Optional[SeralizationHandler] = None,
+    ):
         self.concurrency = concurrency
         self.handlers: Collection[Handler] = []
         if serialization_handler is None:
@@ -104,12 +125,12 @@ class Ardennes():
         log.debug(f"Opening connection.")
         self.connection = await aio_pika.connect_robust()
         await self._on_connection_opened()
-    
+
     async def _on_connection_opened(self):
         log.debug(f"Connection opened.")
         await self._open_channel()
         await self._on_channel_opened()
-        
+
     async def _open_channel(self):
         log.debug(f"Opening channel.")
         self.channel = await self.connection.channel()
@@ -119,6 +140,8 @@ class Ardennes():
 
     async def produce(self, message: BaseModel):
         """
+        Generate a novel message.
+
         Input: n/a
         Output: one
         Consumes input: n/a
@@ -136,7 +159,9 @@ class Ardennes():
                     exchange = await self.channel.get_exchange(exchange_name)
                     serial = self.serialization_handler.serialize(message)
                     await exchange.publish(aio_pika.Message(body=serial), "*")
-                    log.debug(f"Successfully published {message_type} to exchange {exchange_name}.")
+                    log.debug(
+                        f"Successfully published {message_type} to exchange {exchange_name}."
+                    )
                     num_published += 1
                 except aio_pika.exceptions.ChannelClosed:
                     log.debug(f"Exchange {exchange_name} does not exist; skipping.")
@@ -149,12 +174,16 @@ class Ardennes():
         Output: many
         Consumes input: yes
         """
+
         def inner(callback: Callable[[Type[BaseModel]], Collection[Type[BaseModel]]]):
-            handler = Handler(input_model, output_model, callback, HandlerType.SCATTER, self)
+            handler = Handler(
+                input_model, output_model, callback, HandlerType.SCATTER, self
+            )
             self.handlers.append(handler)
 
             def wrapper(*args, **kwargs):
                 callback(*args, **kwargs)
+
         return inner
 
     def gather(self, input_model: Type[BaseModel], output_model: Type[BaseModel]):
@@ -163,12 +192,16 @@ class Ardennes():
         Output: zero or one
         Consumes input: yes
         """
+
         def inner(callback: Callable[[Collection[Type[BaseModel]]], Type[BaseModel]]):
-            handler = Handler(input_model, output_model, callback, HandlerType.GATHER, self)
+            handler = Handler(
+                input_model, output_model, callback, HandlerType.GATHER, self
+            )
             self.handlers.append(handler)
 
             def wrapper(*args, **kwargs):
                 callback(*args, **kwargs)
+
         return inner
 
     def transform(self, input_model: Type[BaseModel], output_model: Type[BaseModel]):
@@ -177,12 +210,16 @@ class Ardennes():
         Output: one
         Consumes input: yes
         """
+
         def inner(callback: Callable[[Type[BaseModel]], Type[BaseModel]]):
-            handler = Handler(input_model, output_model, callback, HandlerType.TRANSFORM, self)
+            handler = Handler(
+                input_model, output_model, callback, HandlerType.TRANSFORM, self
+            )
             self.handlers.append(handler)
-        
+
             def wrapper(*args, **kwargs):
                 callback(*args, **kwargs)
+
         return inner
 
     def subscribe(self, input_model: Type[BaseModel]):
@@ -191,12 +228,14 @@ class Ardennes():
         Output: zero
         Consumes input: no
         """
+
         def inner(callback: Callable[[Type[BaseModel]], None]):
             handler = Handler(input_model, None, callback, HandlerType.SUBSCRIBE, self)
             self.handlers.append(handler)
 
             def wrapper(*args, **kwargs):
                 callback(*args, **kwargs)
+
         return inner
 
     def consume(self, input_model: Type[BaseModel]):
@@ -205,12 +244,14 @@ class Ardennes():
         Output: zero
         Consumes input: yes
         """
+
         def inner(callback: Callable[[Type[BaseModel]], None]):
             handler = Handler(input_model, None, callback, HandlerType.CONSUME, self)
             self.handlers.append(handler)
 
             def wrapper(*args, **kwargs):
                 callback(*args, **kwargs)
+
         return inner
 
     async def _start_handlers(self):
@@ -233,4 +274,3 @@ class Ardennes():
     async def start(self):
         log.debug(f"Starting app.")
         await self._start()
-        

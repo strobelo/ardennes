@@ -6,7 +6,7 @@ authors = ["Derek Strobel <dnstrobel000@gmail.com>"]
 
 [tool.poetry.dependencies]
 python = "^3.9"
-pydantic = "^2.2"
+pydantic = "^2.3"
 typer = "^0.6.1"
 rich = "^12.5.1"
 aio-pika = "^8.2.0"
