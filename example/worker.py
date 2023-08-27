@@ -24,10 +24,10 @@ class JobComplete(BaseModel):
     job_id: int
 
 
-@app.scatter(JobRequest, JobRequestSection)
+@app.scatter()
 def scatter_job(job: JobRequest) -> Collection[JobRequestSection]:
     print(f"User function scatter_job: Got {job}")
-    return [JobRequestSection(job_id=1, section_id=i) for i in range(10)]
+    return [JobRequestSection(job_id=1, section_id=i) for i in range(1)]
 
 
 @app.transform(JobRequestSection, JobCompleteSection)
@@ -36,15 +36,15 @@ def process_section(section: JobRequestSection) -> JobCompleteSection:
     return JobCompleteSection(job_id=section.job_id, section_id=section.section_id)
 
 
-@app.gather(JobCompleteSection, JobComplete)
-def gather_job(sections: Collection[JobCompleteSection]) -> JobComplete:
-    print(f"User function gather_job: Got {sections}")
-    return JobComplete(sections[0].job_id)
+# @app.gather(JobCompleteSection, JobComplete)
+# def gather_job(sections: Collection[JobCompleteSection]) -> JobComplete:
+#     print(f"User function gather_job: Got {sections}")
+#     return JobComplete(sections[0].job_id)
 
 
-@app.consume(JobComplete)
-def consume_job_complete(job_complete: JobComplete):
-    print(f"User function consume_job_complete: Got {job_complete}")
+# @app.consume(JobComplete)
+# def consume_job_complete(job_complete: JobComplete):
+#     print(f"User function consume_job_complete: Got {job_complete}")
 
 
 async def main():

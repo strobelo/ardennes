@@ -9,7 +9,7 @@ from pydantic import BaseModel
 import multiprocessing as mp
 import asyncio
 from ardennes.serial import SeralizationHandler
-from inspect import signature
+import inspect
 
 log = logging.getLogger(__name__)
 
@@ -106,7 +106,7 @@ class Handler:
         exchange_name = get_exchange_name(self.input_model, exchange_type)
         log.debug(f"Declaring exchange {exchange_name} for {self._pretty}")
         self.exchange = await self.parent.channel.declare_exchange(
-            exchange_name, exchange_type
+            exchange_name, exchange_type, passive=True
         )
 
     async def _ensure_queue(self):
@@ -120,8 +120,8 @@ class Handler:
 class ScatterHandler(Handler):
     async def invoke_callback(self, input_data):
         results = await super().invoke_callback(input_data)
-        for result in results:
-            await self.parent.produce(result)
+        coros = [self.parent.produce(result) for result in results]
+        await asyncio.gather(*coros)
         return results
 
 
@@ -147,6 +147,7 @@ class GatherHandler(Handler):
 class TransformHandler(Handler):
     async def invoke_callback(self, input_data):
         result = await super().invoke_callback(input_data)
+        log.debug(f"Transform result: {result}")
         await self.parent.produce(result)
         return result
 
@@ -180,21 +181,12 @@ class Ardennes:
         self.initialized = False
 
     async def _open_connection(self):
-        log.debug(f"Opening connection.")
+        log.debug("Opening connection.")
         self.connection = await aio_pika.connect_robust()
-        await self._on_connection_opened()
-
-    async def _on_connection_opened(self):
-        log.debug(f"Connection opened.")
-        await self._open_channel()
-        await self._on_channel_opened()
-
-    async def _open_channel(self):
-        log.debug(f"Opening channel.")
+        log.debug("Connection opened.")
+        log.debug("Opening channel.")
         self.channel = await self.connection.channel()
-
-    async def _on_channel_opened(self):
-        log.debug(f"Channel opened.")
+        log.debug("Channel opened.")
 
     async def produce(self, message: BaseModel):
         """
@@ -211,29 +203,27 @@ class Ardennes:
             exchange_names = get_exchange_names(type(message))
             num_published = 0
             for exchange_type, exchange_name in exchange_names.items():
-                log.debug(f"Trying exchange {exchange_name} for {message_type}.")
                 try:
-                    exchange = await self.channel.declare_exchange(
-                        exchange_name, exchange_type
-                    )
+                    exchange = await self.channel.get_exchange(exchange_name)
+                    log.debug(f"Verified exchange {exchange_name} with broker.")
                     serial = self.serialization_handler.serialize(message)
                     await exchange.publish(aio_pika.Message(body=serial), "*")
                     log.debug(
                         f"Successfully published {message_type} to exchange {exchange_name}."
                     )
                     num_published += 1
-                except (
-                    aio_pika.exceptions.ChannelClosed,
-                    aio_pika.exceptions.ChannelInvalidStateError,
-                    asyncio.exceptions.CancelledError,
-                ):
+                except aio_pika.exceptions.ChannelClosed:
                     log.debug(
                         f"Exchange {exchange_name} does not exist or no queues bound; skipping."
                     )
 
         log.debug(f"Published {message_type} to {num_published} exchanges.")
 
-    def scatter(self, input_model: Type[BaseModel], output_model: Type[BaseModel]):
+    def scatter(
+        self,
+        input_model: Optional[Type[BaseModel]] = None,
+        output_model: Optional[Type[BaseModel]] = None,
+    ):
         """
         Scatter an input message into a set of output messages.
 
@@ -243,6 +233,12 @@ class Ardennes:
         """
 
         def inner(callback: Callable[[Type[BaseModel]], Collection[Type[BaseModel]]]):
+            nonlocal input_model
+            sig = inspect.signature(callback)
+            for arg in sig.parameters.values():
+                if issubclass(arg.annotation, BaseModel):
+                    input_model = arg.annotation
+                    break
             handler = ScatterHandler(input_model, output_model, callback, self)
             self.handlers.append(handler)
 
