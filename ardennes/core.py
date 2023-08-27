@@ -90,6 +90,7 @@ class Handler:
 
     async def _initialize(self):
         log.debug(f"Initializing {self._pretty}")
+        self.channel = await self.parent.connection.channel()
         await self._ensure_exchange()
         await self._ensure_queue()
         await self._bind()
@@ -105,16 +106,14 @@ class Handler:
         exchange_type = self.get_exchange_type()
         exchange_name = get_exchange_name(self.input_model, exchange_type)
         log.debug(f"Declaring exchange {exchange_name} for {self._pretty}")
-        self.exchange = await self.parent.channel.declare_exchange(
-            exchange_name, exchange_type, passive=True
+        self.exchange = await self.channel.declare_exchange(
+            exchange_name, exchange_type
         )
 
     async def _ensure_queue(self):
         queue_name = get_model_queue_name(self.input_model)
         log.debug(f"Declaring queue {queue_name} for {self._pretty}")
-        self.queue = await self.parent.channel.declare_queue(
-            queue_name, auto_delete=True
-        )
+        self.queue = await self.channel.declare_queue(queue_name, auto_delete=True)
 
 
 class ScatterHandler(Handler):
@@ -184,9 +183,6 @@ class Ardennes:
         log.debug("Opening connection.")
         self.connection = await aio_pika.connect_robust()
         log.debug("Connection opened.")
-        log.debug("Opening channel.")
-        self.channel = await self.connection.channel()
-        log.debug("Channel opened.")
 
     async def produce(self, message: BaseModel):
         """
@@ -197,25 +193,21 @@ class Ardennes:
         Consumes input: n/a
         """
         await self.initialize()
-        async with self.connection:
+        async with self.connection.channel() as channel:
             message_type = type(message).__name__
             log.debug(f"Producing {message_type}.")
             exchange_names = get_exchange_names(type(message))
             num_published = 0
             for exchange_type, exchange_name in exchange_names.items():
-                try:
-                    exchange = await self.channel.get_exchange(exchange_name)
-                    log.debug(f"Verified exchange {exchange_name} with broker.")
-                    serial = self.serialization_handler.serialize(message)
-                    await exchange.publish(aio_pika.Message(body=serial), "*")
-                    log.debug(
-                        f"Successfully published {message_type} to exchange {exchange_name}."
-                    )
-                    num_published += 1
-                except aio_pika.exceptions.ChannelClosed:
-                    log.debug(
-                        f"Exchange {exchange_name} does not exist or no queues bound; skipping."
-                    )
+                exchange = await channel.declare_exchange(exchange_name, exchange_type)
+                log.debug(f"Exchange {exchange_name} declared.")
+                log.debug(f"Verified exchange {exchange_name} with broker.")
+                serial = self.serialization_handler.serialize(message)
+                await exchange.publish(aio_pika.Message(body=serial), "*")
+                log.debug(
+                    f"Successfully published {message_type} to exchange {exchange_name}."
+                )
+                num_published += 1
 
         log.debug(f"Published {message_type} to {num_published} exchanges.")
 
@@ -308,12 +300,12 @@ class Ardennes:
             return
         else:
             await self._open_connection()
+            self.handler_channel = await self.connection.channel()
             self.initialized = True
 
     async def _start(self):
         await self.initialize()
-        async with self.connection:
-            await self._start_handlers()
+        await self._start_handlers()
 
     async def start(self):
         log.debug(f"Starting app.")
