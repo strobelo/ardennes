@@ -2,31 +2,28 @@
 
 [[package]]
 name = "aio-pika"
-version = "8.3.0"
-description = "Wrapper for the aiormq for asyncio and humans."
+version = "9.2.2"
+description = "Wrapper around the aiormq for asyncio and humans"
 optional = false
-python-versions = ">3.6, <4"
+python-versions = ">=3.7,<4.0"
 files = [
-    {file = "aio-pika-8.3.0.tar.gz", hash = "sha256:c0e2601eda6a1097fe1d33c5f9965a86a27b328ac48914d20c23f675b3ab1797"},
-    {file = "aio_pika-8.3.0-py3-none-any.whl", hash = "sha256:36c4742449f1cbcb83165b3733b090cf88f3d2f7f027225eedb8c7f300b05dde"},
+    {file = "aio_pika-9.2.2-py3-none-any.whl", hash = "sha256:d8ff6568b67bbf97b146d1fefe72a27c3124c777cb7a56b3353b12f9130e1111"},
+    {file = "aio_pika-9.2.2.tar.gz", hash = "sha256:bf6dcc60085f1bc0b49c7bda3055ef0d17c97a1a87f4d355e8a02c5bf4f1c5bb"},
 ]
 
 [package.dependencies]
-aiormq = ">=6.6.3,<6.7.0"
+aiormq = ">=6.7.7,<6.8.0"
 yarl = "*"
-
-[package.extras]
-develop = ["aiomisc (>=16.0,<17.0)", "coverage (!=4.3)", "coveralls", "nox", "pylava", "pytest", "pytest-cov", "shortuuid", "sphinx", "sphinx-autobuild", "timeout-decorator", "tox (>=2.4)"]
 
 [[package]]
 name = "aiormq"
-version = "6.6.4"
+version = "6.7.7"
 description = "Pure python AMQP asynchronous client library"
 optional = false
 python-versions = ">=3.7,<4.0"
 files = [
-    {file = "aiormq-6.6.4-py3-none-any.whl", hash = "sha256:9fb93dc871eb9c45a410e29669624790c01b70d27f20d512a22b146c411440ea"},
-    {file = "aiormq-6.6.4.tar.gz", hash = "sha256:95835a4db6117263305d450f838ccdc3eabd427c0deb32fd617769ad4c989e98"},
+    {file = "aiormq-6.7.7-py3-none-any.whl", hash = "sha256:f5efbfcd7d703f3c05c08d4e74cfaa66ca7199840e2969d75ad41b0810026b0a"},
+    {file = "aiormq-6.7.7.tar.gz", hash = "sha256:3b93f612f56989b2757a9a7b299dd94dd3227ce28ba43e81d5fbcded6341dfab"},
 ]
 
 [package.dependencies]
@@ -482,4 +479,4 @@ multidict = ">=4.0"
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.9"
-content-hash = "a380fe3c70b942fb1ec7b97a23ae352bce8e669ca10d2273381e48ce85659379"
+content-hash = "6ad76f3ff38786610ad5ba08dd62af76ba34136834cf57c6e553e2dceaed7360"
