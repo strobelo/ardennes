@@ -24,7 +24,7 @@ class JobComplete(BaseModel):
     job_id: int
 
 
-@app.scatter()
+@app.scatter(JobRequest, JobRequestSection)
 def scatter_job(job: JobRequest) -> Collection[JobRequestSection]:
     print(f"User function scatter_job: Got {job}")
     return [JobRequestSection(job_id=1, section_id=i) for i in range(10)]

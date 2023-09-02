@@ -46,6 +46,7 @@ def get_exchange_names(model: Type[BaseModel]):
         result[exchange_type] = get_exchange_name(model, exchange_type)
     return result
 
+class 
 
 class Handler:
     def __init__(
@@ -184,7 +185,7 @@ class Ardennes:
         self.connection = await aio_pika.connect_robust()
         log.debug("Connection opened.")
 
-    async def produce(self, message: BaseModel):
+    async def produce(self, message: BaseModel, job_id: Optional[str] = None):
         """
         Generate a novel message.
 
@@ -192,6 +193,8 @@ class Ardennes:
         Output: one
         Consumes input: n/a
         """
+        routing_key = job_id if job_id is not None else "*"
+
         await self.initialize()
         async with self.connection.channel() as channel:
             message_type = type(message).__name__
@@ -203,7 +206,7 @@ class Ardennes:
                 log.debug(f"Exchange {exchange_name} declared.")
                 log.debug(f"Verified exchange {exchange_name} with broker.")
                 serial = self.serialization_handler.serialize(message)
-                await exchange.publish(aio_pika.Message(body=serial), "*")
+                await exchange.publish(aio_pika.Message(body=serial), routing_key)
                 log.debug(
                     f"Successfully published {message_type} to exchange {exchange_name}."
                 )
@@ -225,12 +228,6 @@ class Ardennes:
         """
 
         def inner(callback: Callable[[Type[BaseModel]], Collection[Type[BaseModel]]]):
-            nonlocal input_model
-            sig = inspect.signature(callback)
-            for arg in sig.parameters.values():
-                if issubclass(arg.annotation, BaseModel):
-                    input_model = arg.annotation
-                    break
             handler = ScatterHandler(input_model, output_model, callback, self)
             self.handlers.append(handler)
 
